@@ -1,0 +1,5 @@
+# Libra ignore file
+# Uses gitignore-compatible patterns.
+# Add generated files and local-only paths below.
+
+target/

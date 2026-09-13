@@ -271,3 +271,15 @@ declared in the `LICENSE-APACHE` and `LICENSE-MIT` files at the repository root.
 
 *For further details, see the source code under `src/` and the
 `copilot-instructions.md` file for repository‑wide conventions.*
+# SQLite backend lifecycle
+
+The `storage_sqlite` feature uses SQLx 0.9.0, matching Libra. Both pool idle
+timeout and maximum lifetime are disabled to avoid SQLx's idle-count reaper
+race, which can spin during runtime shutdown. Connection limits and acquire/
+busy timeouts retain their defaults or configured values. Idle connections
+remain open until pool drop/closure; existing vault schema and byte bindings
+are unchanged. SQLite `list` treats `%`, `_`, and `\` in prefixes literally.
+
+Focused regression: `cargo test --features storage_sqlite --lib storage::sql::sqlite::tests::`.
+Libra's local development checkout consumes this crate through `../libvault-rs`;
+publish the fix before switching its dependency to a registry release.

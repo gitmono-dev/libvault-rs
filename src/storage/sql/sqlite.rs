@@ -1,8 +1,7 @@
-use regex::Regex;
 use serde::{Deserialize, Deserializer, de::Error as _};
 use serde_json::{Map, Value};
-use sqlx::SqlitePool;
-use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::{AssertSqlSafe, SqlitePool};
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -137,8 +136,16 @@ pub struct SqliteBackend {
 impl SqliteBackend {
     pub async fn new(conf: &HashMap<String, Value>) -> Result<Self, RvError> {
         let conf: SqliteBackendConfig = serde_json::from_value(serde_json::to_value(conf)?)?;
-        let re = Regex::new(r"^(?-u:\w)+$").expect("SQLite regex init failed");
-        if !re.is_match(&conf.table) {
+        Self::from_config(conf).await
+    }
+
+    async fn from_config(conf: SqliteBackendConfig) -> Result<Self, RvError> {
+        if conf.table.is_empty()
+            || !conf
+                .table
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'_')
+        {
             let err = RvError::ErrSqliteDisallowedFields(conf.table.clone());
             log::debug!("{err:?}");
             Err(err)?;
@@ -150,15 +157,23 @@ impl SqliteBackend {
             .read_only(false);
         log::debug!("Sqlite connect options: {:?}", opts);
 
-        let pool = SqlitePool::connect_with(opts).await?;
-        sqlx::query(&format!(
+        // SQLx 0.9's idle counter can transiently underflow on connection
+        // return. Its reaper snapshots that count in a non-yielding loop.
+        // Disable both timers so runtime shutdown cannot get stuck there.
+        let pool = SqlitePoolOptions::new()
+            .idle_timeout(None)
+            .max_lifetime(None)
+            .connect_with(opts)
+            .await?;
+        // INVARIANT: table identifiers are validated above; values are bound.
+        sqlx::query(AssertSqlSafe(format!(
             r#"CREATE TABLE IF NOT EXISTS `{}` (
     `vault_key` TEXT NOT NULL,
     `vault_value` BLOB NOT NULL,
     PRIMARY KEY (`vault_key`)
 );"#,
             conf.table
-        ))
+        )))
         .execute(&pool)
         .await?;
 
@@ -182,9 +197,9 @@ impl Backend for SqliteBackend {
 
         let sql = format!(
             "SELECT vault_value FROM `{}` WHERE vault_key = ?",
-            &self.table
+            self.table
         );
-        let ret: Option<SqliteBackendEntry> = sqlx::query_as(&sql)
+        let ret: Option<SqliteBackendEntry> = sqlx::query_as(AssertSqlSafe(sql))
             .bind(key.as_bytes())
             .fetch_optional(&self.pool)
             .await?;
@@ -206,9 +221,9 @@ impl Backend for SqliteBackend {
 
         let sql = format!(
             "INSERT INTO `{}` (vault_key, vault_value) VALUES (?, ?) ON CONFLICT(vault_key) DO UPDATE SET vault_value = excluded.vault_value",
-            &self.table
+            self.table
         );
-        sqlx::query(&sql)
+        sqlx::query(AssertSqlSafe(sql))
             .bind(entry.key.as_bytes())
             .bind(&entry.value)
             .execute(&self.pool)
@@ -222,8 +237,8 @@ impl Backend for SqliteBackend {
             Err(RvError::ErrSqliteBackendNotSupportAbsolute)?;
         }
 
-        let sql = format!("DELETE FROM `{}` WHERE vault_key = ?", &self.table);
-        sqlx::query(&sql)
+        let sql = format!("DELETE FROM `{}` WHERE vault_key = ?", self.table);
+        sqlx::query(AssertSqlSafe(sql))
             .bind(key.as_bytes())
             .execute(&self.pool)
             .await?;
@@ -237,8 +252,8 @@ impl Backend for SqliteBackend {
         }
 
         let sql = format!(
-            "SELECT vault_key FROM `{}` WHERE vault_key LIKE ? ESCAPE '\\\\'",
-            &self.table
+            "SELECT vault_key FROM `{}` WHERE vault_key LIKE ? ESCAPE '\\'",
+            self.table
         );
         // Escape the LIKE wildcard characters (% and _) and the escape character (\)
         // so that `prefix` is treated as a literal prefix.
@@ -246,7 +261,7 @@ impl Backend for SqliteBackend {
             .replace('\\', "\\\\")
             .replace('%', "\\%")
             .replace('_', "\\_");
-        let keys: Vec<Vec<u8>> = sqlx::query_scalar(&sql)
+        let keys: Vec<Vec<u8>> = sqlx::query_scalar(AssertSqlSafe(sql))
             .bind(format!("{}%", escaped_prefix).as_bytes())
             .fetch_all(&self.pool)
             .await?;
@@ -267,5 +282,113 @@ impl Backend for SqliteBackend {
         }
 
         Ok(res.into_iter().collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn sqlite_pool_lifecycle_preserves_stored_bytes_and_literal_prefixes() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SqliteBackendConfig {
+            filename: dir.path().join("vault.db"),
+            table: "vault".to_owned(),
+            timeout: Duration::from_secs(5),
+            create_if_missing: true,
+        };
+        let backend = SqliteBackend::from_config(config.clone()).await.unwrap();
+        assert_eq!(backend.pool.options().get_idle_timeout(), None);
+        assert_eq!(backend.pool.options().get_max_lifetime(), None);
+        assert_eq!(backend.pool.options().get_max_connections(), 10);
+        assert_eq!(
+            backend.pool.options().get_acquire_timeout(),
+            Duration::from_secs(30)
+        );
+        // Seed the exact schema/bindings used by libvault 0.2.x before testing
+        // new CRUD, so the regression checks existing persisted vault data.
+        sqlx::query("INSERT INTO vault (vault_key, vault_value) VALUES (?, ?)")
+            .bind(b"old/key".as_slice())
+            .bind(b"\0\xffold".as_slice())
+            .execute(&backend.pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            backend.get("old/key").await.unwrap().unwrap().value,
+            b"\0\xffold"
+        );
+        for key in ["a%/one", "a_/two", "a\\/three", "abc/other", "a%/dir/leaf"] {
+            backend
+                .put(&BackendEntry {
+                    key: key.to_owned(),
+                    value: vec![0, 255, 1],
+                })
+                .await
+                .unwrap();
+        }
+        let mut listed = backend.list("a%/").await.unwrap();
+        listed.sort();
+        assert_eq!(listed, ["dir/", "one"]);
+        assert_eq!(backend.list("a_/").await.unwrap(), ["two"]);
+        assert_eq!(backend.list("a\\/").await.unwrap(), ["three"]);
+        backend
+            .put(&BackendEntry {
+                key: "old/key".to_owned(),
+                value: vec![7, 0, 255],
+            })
+            .await
+            .unwrap();
+        backend.pool.close().await;
+        let mut existing = config.clone();
+        existing.create_if_missing = false;
+        let backend = SqliteBackend::from_config(existing).await.unwrap();
+        assert_eq!(
+            backend.get("old/key").await.unwrap().unwrap().value,
+            [7, 0, 255]
+        );
+        let mut reads = tokio::task::JoinSet::new();
+        let backend = std::sync::Arc::new(backend);
+        for _ in 0..8 {
+            let backend = backend.clone();
+            reads.spawn(async move {
+                for _ in 0..16 {
+                    assert!(backend.get("old/key").await.unwrap().is_some());
+                }
+            });
+        }
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while let Some(result) = reads.join_next().await {
+                result.unwrap();
+            }
+        })
+        .await
+        .expect("concurrent vault reads must finish");
+        backend.delete("old/key").await.unwrap();
+        backend.delete("old/key").await.unwrap();
+        assert!(backend.get("old/key").await.unwrap().is_none());
+        assert!(backend.get("/absolute").await.is_err());
+        assert!(backend.list("/absolute").await.is_err());
+        assert!(backend.delete("/absolute").await.is_err());
+        assert!(
+            backend
+                .put(&BackendEntry {
+                    key: "/absolute".to_owned(),
+                    value: vec![]
+                })
+                .await
+                .is_err()
+        );
+        tokio::time::timeout(Duration::from_secs(10), backend.pool.close())
+            .await
+            .unwrap();
+        let mut invalid = config.clone();
+        invalid.table = "vault`; DROP TABLE vault;--".to_owned();
+        assert!(SqliteBackend::from_config(invalid).await.is_err());
+        let mut absent = config;
+        absent.filename = dir.path().join("missing.db");
+        absent.create_if_missing = false;
+        assert!(SqliteBackend::from_config(absent.clone()).await.is_err());
+        assert!(!absent.filename.exists());
     }
 }

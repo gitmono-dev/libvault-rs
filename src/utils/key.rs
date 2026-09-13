@@ -51,9 +51,15 @@ fn cipher_from_key_type_and_bits(key_type: &str, bits: u32) -> Result<Cipher, Rv
         ("aes-ecb", 128) => Ok(Cipher::aes_128_ecb()),
         ("aes-ecb", 192) => Ok(Cipher::aes_192_ecb()),
         ("aes-ecb", 256) => Ok(Cipher::aes_256_ecb()),
-        #[cfg(feature = "crypto_adaptor_tongsuo")]
+        #[cfg(all(
+            feature = "crypto_adaptor_tongsuo",
+            not(feature = "crypto_adaptor_openssl")
+        ))]
         ("sm4-gcm", 128) => Ok(Cipher::sm4_gcm()),
-        #[cfg(feature = "crypto_adaptor_tongsuo")]
+        #[cfg(all(
+            feature = "crypto_adaptor_tongsuo",
+            not(feature = "crypto_adaptor_openssl")
+        ))]
         ("sm4-ccm", 128) => Ok(Cipher::sm4_ccm()),
         _ => Err(RvError::ErrPkiKeyBitsInvalid),
     }
@@ -96,7 +102,10 @@ impl KeyBundle {
                 let ec_key = EcKey::generate(&ec_group)?;
                 PKey::from_ec_key(ec_key)?.private_key_to_pem_pkcs8()?
             }
-            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            #[cfg(all(
+                feature = "crypto_adaptor_tongsuo",
+                not(feature = "crypto_adaptor_openssl")
+            ))]
             "sm2" => {
                 self.bits = 256;
                 let ec_group = EcGroup::from_curve_name(Nid::SM2)?;
@@ -106,7 +115,10 @@ impl KeyBundle {
             "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm" => {
                 let _ = cipher_from_key_type_and_bits(self.key_type.as_str(), self.bits)?;
 
-                #[cfg(not(feature = "crypto_adaptor_tongsuo"))]
+                #[cfg(not(all(
+                    feature = "crypto_adaptor_tongsuo",
+                    not(feature = "crypto_adaptor_openssl")
+                )))]
                 if self.key_type.starts_with("sm4-") {
                     return Err(RvError::ErrPkiKeyTypeInvalid);
                 }
@@ -138,7 +150,10 @@ impl KeyBundle {
     pub fn sign(&self, data: &[u8]) -> Result<Vec<u8>, RvError> {
         let digest = match self.key_type.as_str() {
             "rsa" | "ec" => MessageDigest::sha256(),
-            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            #[cfg(all(
+                feature = "crypto_adaptor_tongsuo",
+                not(feature = "crypto_adaptor_openssl")
+            ))]
             "sm2" => MessageDigest::sm3(),
             _ => return Err(RvError::ErrPkiKeyOperationInvalid),
         };
@@ -157,7 +172,10 @@ impl KeyBundle {
     pub fn verify(&self, data: &[u8], signature: &[u8]) -> Result<bool, RvError> {
         let digest = match self.key_type.as_str() {
             "rsa" | "ec" => MessageDigest::sha256(),
-            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            #[cfg(all(
+                feature = "crypto_adaptor_tongsuo",
+                not(feature = "crypto_adaptor_openssl")
+            ))]
             "sm2" => MessageDigest::sm3(),
             _ => return Err(RvError::ErrPkiKeyOperationInvalid),
         };

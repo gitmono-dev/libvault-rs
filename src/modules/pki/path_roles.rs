@@ -593,7 +593,10 @@ impl PkiBackendInner {
                     return Err(RvError::ErrPkiKeyBitsInvalid);
                 }
             }
-            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            #[cfg(all(
+                feature = "crypto_adaptor_tongsuo",
+                not(feature = "crypto_adaptor_openssl")
+            ))]
             "sm2" => {
                 if key_bits == 0 {
                     key_bits = 256;

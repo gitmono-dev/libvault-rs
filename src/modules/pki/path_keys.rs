@@ -536,12 +536,18 @@ impl PkiBackendInner {
                 key_type.as_str(),
                 "aes-gcm" | "aes-cbc" | "sm4-gcm" | "sm4-ccm"
             );
-            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            #[cfg(all(
+                feature = "crypto_adaptor_tongsuo",
+                not(feature = "crypto_adaptor_openssl")
+            ))]
             let is_valid_key_type = matches!(
                 key_type.as_str(),
                 "aes-gcm" | "aes-cbc" | "aes-ecb" | "sm4-gcm" | "sm4-ccm"
             );
-            #[cfg(not(feature = "crypto_adaptor_tongsuo"))]
+            #[cfg(not(all(
+                feature = "crypto_adaptor_tongsuo",
+                not(feature = "crypto_adaptor_openssl")
+            )))]
             let is_valid_key_type = matches!(key_type.as_str(), "aes-gcm" | "aes-cbc" | "aes-ecb");
 
             if !is_valid_key_type {

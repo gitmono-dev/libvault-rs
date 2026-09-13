@@ -13,7 +13,7 @@ use openssl::{
     hash::{MessageDigest, hash},
     symm::{Cipher, Crypter, Mode},
 };
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 

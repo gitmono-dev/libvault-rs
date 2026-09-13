@@ -1,5 +1,5 @@
 use std::{
-    sync::Arc,
+    hash::Hasher,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -28,8 +28,11 @@ use openssl_sys::{
     stack_st_X509,
 };
 use rustls::{
-    client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
-    pki_types::CertificateDer,
+    client::danger::{
+        HandshakeSignatureValid, PeerVerified, ServerIdentity, ServerVerifier,
+        SignatureVerificationInput,
+    },
+    crypto::SignatureScheme,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeTuple};
 use serde_bytes::ByteBuf;
@@ -321,7 +324,10 @@ impl Certificate {
 
         let digest = match self.key_type.as_str() {
             "rsa" | "ec" => MessageDigest::sha256(),
-            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            #[cfg(all(
+                feature = "crypto_adaptor_tongsuo",
+                not(feature = "crypto_adaptor_openssl")
+            ))]
             "sm2" => MessageDigest::sm3(),
             _ => return Err(RvError::ErrPkiKeyTypeInvalid),
         };
@@ -360,7 +366,10 @@ impl Certificate {
                 let ec_key = EcKey::generate(ec_group.as_ref())?;
                 PKey::from_ec_key(ec_key)?
             }
-            #[cfg(feature = "crypto_adaptor_tongsuo")]
+            #[cfg(all(
+                feature = "crypto_adaptor_tongsuo",
+                not(feature = "crypto_adaptor_openssl")
+            ))]
             "sm2" => {
                 if key_bits != 256 {
                     return Err(RvError::ErrPkiKeyBitsInvalid);
@@ -402,42 +411,48 @@ impl Certificate {
 #[derive(Debug)]
 pub struct DisabledVerifier;
 
-impl ServerCertVerifier for DisabledVerifier {
-    fn verify_server_cert(
+impl ServerVerifier for DisabledVerifier {
+    fn verify_identity(
         &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        Ok(ServerCertVerified::assertion())
+        _identity: &ServerIdentity<'_>,
+    ) -> Result<PeerVerified, rustls::Error> {
+        Ok(PeerVerified::assertion())
     }
 
     fn verify_tls12_signature(
         &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
+        _input: &SignatureVerificationInput<'_>,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
         Ok(HandshakeSignatureValid::assertion())
     }
 
     fn verify_tls13_signature(
         &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
+        _input: &SignatureVerificationInput<'_>,
     ) -> Result<HandshakeSignatureValid, rustls::Error> {
         Ok(HandshakeSignatureValid::assertion())
     }
 
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        let provider = rustls::crypto::CryptoProvider::get_default()
-            .cloned()
-            .unwrap_or(Arc::new(rustls::crypto::ring::default_provider()));
-        provider
-            .signature_verification_algorithms
-            .supported_schemes()
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        vec![
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            SignatureScheme::ECDSA_NISTP384_SHA384,
+            SignatureScheme::ECDSA_NISTP521_SHA512,
+            SignatureScheme::ED25519,
+            SignatureScheme::RSA_PSS_SHA256,
+            SignatureScheme::RSA_PSS_SHA384,
+            SignatureScheme::RSA_PSS_SHA512,
+            SignatureScheme::RSA_PKCS1_SHA256,
+            SignatureScheme::RSA_PKCS1_SHA384,
+            SignatureScheme::RSA_PKCS1_SHA512,
+        ]
+    }
+
+    fn request_ocsp_response(&self) -> bool {
+        false
+    }
+
+    fn hash_config(&self, hasher: &mut dyn Hasher) {
+        hasher.write(b"libvault-disabled-verifier");
     }
 }

@@ -7,7 +7,7 @@ use blake3;
 use chrono::prelude::*;
 use humantime::{format_rfc3339, parse_duration, parse_rfc3339};
 use openssl::hash::{Hasher, MessageDigest};
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashSet;
 

@@ -1,6 +1,6 @@
 [package]
 name = "libvault"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 authors = ["Eli Ma <eli@patch.sh>"]
 description = "the libvault is modified from RustyVault"
@@ -17,65 +17,67 @@ serde_json = "1.0.151"
 serde_bytes = "0.11.19"
 serde_yaml = "0.9.33"
 go-defer = "0.1.0"
-rand = "0.9.5"
+rand = "0.10.2"
 derivative = "2.2.0"
-enum-map = "2.7.3"
-strum = { version = "0.25.0", features = ["derive"] }
-strum_macros = "0.25.3"
-radix_trie = "0.2.1"
+enum-map = "3.1.0"
+strum = { version = "0.28.0", features = ["derive"] }
+strum_macros = "0.28.0"
+radix_trie = "0.3.0"
 lazy_static = "1.5.0"
 regex = "1.13.1"
-hcl-rs = "0.18.7"
+hcl-rs = "0.19.8"
 log = "0.4.33"
 hex = "0.4.3"
 humantime = "2.4.0"
 as-any = "0.3.2"
-pem = "3.0.6"
+pem = "4.0.0"
 chrono = "0.4.45"
 zeroize = { version = "1.9.0", features = ["zeroize_derive"] }
-bcrypt = "0.17.1"
+bcrypt = "0.19.3"
 url = "2.5.8"
-ureq = { version = "2.12.1", features = ["json"] }
-reqwest = { version = "0.12.28", features = ["json", "rustls-tls"] }
-rustls = "0.23.43"
+ureq = { version = "3.4.1", features = ["json"] }
+reqwest = { version = "0.13.5", features = ["json", "rustls"] }
+rustls = "0.24.0-dev.1"
 rustls-pemfile = "2.2.0"
-webpki-roots = "0.26.11"
+webpki-roots = "1.0.9"
 glob = "0.3.4"
 base64 = { version = "0.22.1", features = ["alloc"] }
-ipnetwork = "0.17.0"
+ipnetwork = { version = "0.21.1", features = ["serde"] }
 blake2b_simd = "1.0.5"
-derive_more = "0.99.20"
-dashmap = "6.2.1"
+derive_more = { version = "2.1.1", features = ["full"] }
+dashmap = "7.0.0-rc2"
 better_default = "1.0.5"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
 async-trait = "0.1.92"
-stretto = "0.8.4"
+stretto = "0.9.0"
 priority-queue = "2.7.0"
 crossbeam-channel = "0.5.16"
 lockfile = "0.4.0"
 arc-swap = "1.9.2"
 blake3 = "1.8.7"
-itertools = "0.14.0"
-etcd-client = { version = "0.17.0", features = ["tls"], optional = true }
+itertools = "0.15.0"
+etcd-client = { version = "0.20.0", features = ["tls"], optional = true }
 tracing = "0.1.44"
 builder-pattern = "0.4.2"
 x509-parser = "0.18.1"
-rustls-webpki = "0.103.14"
-pgp = "0.19.0"
-ssh-key = { version = "0.6.7", features = ["std", "crypto"] }
-smallvec = "1.15.2"
+rustls-webpki = "0.104.0-alpha.7"
+pgp = "0.20.0"
+ssh-key = { version = "0.7.0-rc.11", features = ["std", "crypto", "getrandom"] }
+smallvec = "1.16.1"
+# `pgp` currently uses rand 0.8/rand_core 0.6 in its public APIs, so the
+# RNG passed to it must use that compatible rand_chacha release.
 rand_chacha = "0.3.1"
 tonic = "0.14.6"
 openssl = { version = "0.10.81", optional = true }
 openssl-sys = { version = "0.9.117", optional = true }
-sqlx = { version = "0.8.6", optional = true }
+sqlx = { version = "0.9.0", features = ["runtime-tokio"], optional = true }
 tempfile = "3.27.0"
 
 [build-dependencies]
-toml = "0.8.23"
+toml = "1.1.6"
 
 [dev-dependencies]
-qlean = "0.2.3"
+qlean = "0.3.1"
 
 [features]
 default = ["crypto_adaptor_openssl"]

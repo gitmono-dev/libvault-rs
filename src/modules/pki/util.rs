@@ -48,7 +48,10 @@ pub fn get_role_params(req: &mut Request) -> Result<RoleEntry, RvError> {
                 return Err(RvError::ErrPkiKeyBitsInvalid);
             }
         }
-        #[cfg(feature = "crypto_adaptor_tongsuo")]
+        #[cfg(all(
+            feature = "crypto_adaptor_tongsuo",
+            not(feature = "crypto_adaptor_openssl")
+        ))]
         "sm2" => {
             if key_bits == 0 {
                 key_bits = 256;
@@ -169,15 +172,13 @@ pub fn generate_certificate(
     }
 
     let not_before = SystemTime::now() - Duration::from_secs(10);
-    let not_after: SystemTime;
-    if role_entry.not_after.len() > 18 {
-        let parsed_time = parse_rfc3339(&role_entry.not_after)?;
-        not_after = parsed_time;
+    let not_after = if role_entry.not_after.len() > 18 {
+        parse_rfc3339(&role_entry.not_after)?
     } else if role_entry.ttl != Duration::from_secs(0) {
-        not_after = not_before + role_entry.ttl;
+        not_before + role_entry.ttl
     } else {
-        not_after = not_before + role_entry.max_ttl;
-    }
+        not_before + role_entry.max_ttl
+    };
 
     let mut subject_name = X509NameBuilder::new().unwrap();
     if !role_entry.country.is_empty() {

@@ -24,29 +24,15 @@ use toml::Value;
 //    "#
 //}
 
-#[cfg(all(feature = "crypto_adaptor_openssl", feature = "crypto_adaptor_tongsuo"))]
-compile_error! {
-    r#"
-    Only one cryptography adapator can be enabled!
-
-    In RustyVault, the real cryptographic operations are done via "crypto_adaptor"s.
-
-    A crypto adaptor is a module that conveys and translates high level cryptography
-    operations like encryption, signing into the APIs provided by underlying cryptography
-    libraries such as OpenSSL, Tongsuo and so forth.
-
-    At current stage, only one crypto_adaptor can be enabled at compilation phase and later
-    be used at run-time. "crypto_adaptor"s are configured as 'feature's in the Cargo context.
-
-    Currently, the supported feature names of crypto adaptors are as follows, you can enable
-    them by adding one '--features crypto_adaptor_name' option when running "cargo build":
-        1. the OpenSSL adaptor: crypto_adaptor_openssl
-        2. the Tongsuo adaptor: crypto_adaptor_tongsuo
-    "#
-}
-
 fn main() {
-    if env::var("DEP_OPENSSL_TONGSUO").is_ok() || cfg!(feature = "crypto_adaptor_tongsuo") {
+    println!("cargo:rustc-check-cfg=cfg(tongsuo)");
+
+    // `cargo --all-features` enables both adaptor flags.  Prefer the standard
+    // OpenSSL adaptor in that validation configuration; a Tongsuo build is
+    // selected only when it is the sole requested adaptor.
+    if env::var("DEP_OPENSSL_TONGSUO").is_ok()
+        || (cfg!(feature = "crypto_adaptor_tongsuo") && !cfg!(feature = "crypto_adaptor_openssl"))
+    {
         println!("cargo:rustc-cfg=tongsuo");
     }
 

@@ -8,7 +8,7 @@ use openssl::{
     rsa::Rsa,
     sign::Signer,
 };
-use rand::Rng;
+use rand::RngExt;
 
 use crate::errors::RvError;
 

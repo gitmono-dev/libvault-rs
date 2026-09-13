@@ -194,7 +194,7 @@ impl CertBackendInner {
         }
 
         let url = crl.cdp.as_ref().unwrap().url.as_str();
-        let body: String = ureq::get(url).call()?.into_string()?;
+        let body = ureq::get(url).call()?.body_mut().read_to_string()?;
 
         let x509crl = X509Crl::from_pem(body.as_bytes())?;
         self.set_crl(req, Some(x509crl), name, crl.cdp).await?;

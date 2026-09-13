@@ -7,7 +7,13 @@
 
 #[macro_use]
 pub mod common;
-#[cfg(feature = "crypto_adaptor_openssl")]
+#[cfg(not(all(
+    feature = "crypto_adaptor_tongsuo",
+    not(feature = "crypto_adaptor_openssl")
+)))]
 pub mod openssl_adaptor;
-#[cfg(feature = "crypto_adaptor_tongsuo")]
+#[cfg(all(
+    feature = "crypto_adaptor_tongsuo",
+    not(feature = "crypto_adaptor_openssl")
+))]
 pub mod tongsuo_adaptor;

@@ -29,7 +29,7 @@
 
 use std::ops::DerefMut;
 
-use rand::{RngCore, rng};
+use rand::{RngExt, rng};
 use zeroize::Zeroizing;
 
 use crate::errors::RvError;
@@ -84,7 +84,7 @@ impl ShamirSecret {
         let mut rng = rng();
         let mut rand_container = vec![0u8; (threshold - 1) as usize];
         for c in secret {
-            rng.fill_bytes(&mut rand_container);
+            rng.fill(&mut rand_container);
             let mut coef: Vec<u8> = vec![*c];
             for r in rand_container.iter() {
                 coef.push(*r);
@@ -153,12 +153,8 @@ impl ShamirSecret {
                 fxs.push(share[0..share.len()][byte_to_use]);
             }
 
-            match ShamirSecret::full_lagrange(&xs, &fxs) {
-                None => return None,
-                Some(resulting_poly) => {
-                    mysecretdata.push(resulting_poly[0]);
-                }
-            }
+            let resulting_poly = ShamirSecret::full_lagrange(&xs, &fxs)?;
+            mysecretdata.push(resulting_poly[0]);
         }
 
         Some(mysecretdata)

@@ -55,9 +55,15 @@
 //! $ cargo build --features crypto_adaptor_tongsuo --no-default-features
 //! ~~~
 
-#[cfg(feature = "crypto_adaptor_openssl")]
+#[cfg(not(all(
+    feature = "crypto_adaptor_tongsuo",
+    not(feature = "crypto_adaptor_openssl")
+)))]
 use crypto_adaptors::openssl_adaptor::AdaptorCTX;
-#[cfg(feature = "crypto_adaptor_tongsuo")]
+#[cfg(all(
+    feature = "crypto_adaptor_tongsuo",
+    not(feature = "crypto_adaptor_openssl")
+))]
 use crypto_adaptors::tongsuo_adaptor::AdaptorCTX;
 
 use crate::errors::RvError;
@@ -142,8 +148,20 @@ pub struct SM4 {
 ///
 /// The following code works only with `crypto_adaptor_tongsuo`.
 ///
-#[cfg_attr(feature = "crypto_adaptor_tongsuo", doc = "~~~")]
-#[cfg_attr(not(feature = "crypto_adaptor_tongsuo"), doc = "~~~ignore")]
+#[cfg_attr(
+    all(
+        feature = "crypto_adaptor_tongsuo",
+        not(feature = "crypto_adaptor_openssl")
+    ),
+    doc = "~~~"
+)]
+#[cfg_attr(
+    not(all(
+        feature = "crypto_adaptor_tongsuo",
+        not(feature = "crypto_adaptor_openssl")
+    )),
+    doc = "~~~ignore"
+)]
 /// use libvault::modules::crypto::{SM4, CipherMode, BlockCipher};
 ///
 /// let data: [&[u8]; 2] = [b"The best way to not feel hopeless ",
@@ -298,8 +316,20 @@ pub trait BlockCipher {
 ///
 /// The following code works only with `crypto_adaptor_tongsuo`.
 ///
-#[cfg_attr(feature = "crypto_adaptor_tongsuo", doc = "~~~")]
-#[cfg_attr(not(feature = "crypto_adaptor_tongsuo"), doc = "~~~ignore")]
+#[cfg_attr(
+    all(
+        feature = "crypto_adaptor_tongsuo",
+        not(feature = "crypto_adaptor_openssl")
+    ),
+    doc = "~~~"
+)]
+#[cfg_attr(
+    not(all(
+        feature = "crypto_adaptor_tongsuo",
+        not(feature = "crypto_adaptor_openssl")
+    )),
+    doc = "~~~ignore"
+)]
 /// ~~~
 /// use libvault::modules::crypto::{SM4, CipherMode, BlockCipher, AEADCipher};
 ///

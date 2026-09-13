@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use base64::Engine;
 use humantime::parse_duration;
 use openssl::{asn1::Asn1Time, pkey::PKey, x509::X509NameBuilder};
-use rand::Rng;
+use rand::RngExt;
 use serde_json::{Map, Value};
 use tracing::info;
 
